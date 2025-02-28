@@ -8,11 +8,10 @@ import {
 import { assertEquals } from 'https://deno.land/std@0.90.0/testing/asserts.ts';
 
 Clarinet.test({
-  name: "Ensures that transaction recording works",
+  name: "Ensures that transaction recording works with initialization",
   async fn(chain: Chain, accounts: Map<string, Account>) {
     const deployer = accounts.get("deployer")!;
-    const wallet1 = accounts.get("wallet_1")!;
-
+    
     let block = chain.mineBlock([
       Tx.contractCall(
         "chain-pulse",
@@ -32,6 +31,24 @@ Clarinet.test({
     );
     
     dailyStats.result.expectSome();
+  }
+});
+
+Clarinet.test({
+  name: "Ensures invalid transaction amount is rejected",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    
+    let block = chain.mineBlock([
+      Tx.contractCall(
+        "chain-pulse",
+        "record-transaction",
+        [types.uint(0)],
+        deployer.address
+      )
+    ]);
+
+    block.receipts[0].result.expectErr(types.uint(101));
   }
 });
 
@@ -59,5 +76,30 @@ Clarinet.test({
     );
     
     addressActivity.result.expectSome();
+  }
+});
+
+Clarinet.test({
+  name: "Ensures total transaction count is tracked correctly",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    
+    let block = chain.mineBlock([
+      Tx.contractCall(
+        "chain-pulse",
+        "record-transaction",
+        [types.uint(1000)],
+        deployer.address
+      )
+    ]);
+
+    let totalTx = chain.callReadOnlyFn(
+      "chain-pulse",
+      "get-total-tx-count",
+      [],
+      deployer.address
+    );
+    
+    totalTx.result.expectOk().expectUint(1);
   }
 });
