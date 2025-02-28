@@ -4,6 +4,8 @@
 (define-constant contract-owner tx-sender)
 (define-constant err-owner-only (err u100))
 (define-constant err-invalid-data (err u101))
+(define-constant err-not-initialized (err u102))
+(define-constant err-overflow (err u103))
 
 ;; Data Maps
 (define-map daily-stats
@@ -24,12 +26,41 @@
 (define-data-var current-day uint u0)
 (define-data-var total-tx-count uint u0)
 
+;; Private Functions
+(define-private (initialize-daily-stats (day uint))
+  (map-set daily-stats
+    { date: day }
+    {
+      tx-count: u0,
+      active-addresses: u0,
+      volume: u0
+    }
+  )
+)
+
+(define-private (update-total-tx-count)
+  (match (+ (var-get total-tx-count) u1)
+    total (begin
+      (var-set total-tx-count total)
+      (ok total))
+    error err-overflow
+  )
+)
+
 ;; Public Functions
 (define-public (record-transaction (amount uint))
   (let
     (
-      (current-stats (unwrap! (get-daily-stats (var-get current-day)) (err u102)))
+      (current-stats (match (get-daily-stats (var-get current-day))
+        success success
+        failure (begin
+          (initialize-daily-stats (var-get current-day))
+          (unwrap! (get-daily-stats (var-get current-day)) err-not-initialized)
+        )
+      ))
     )
+    (asserts! (> amount u0) err-invalid-data)
+    (try! (update-total-tx-count))
     (map-set daily-stats
       { date: (var-get current-day) }
       {
@@ -68,4 +99,8 @@
 
 (define-read-only (get-address-last-active (address principal))
   (map-get? address-activity { address: address })
+)
+
+(define-read-only (get-total-tx-count)
+  (ok (var-get total-tx-count))
 )
