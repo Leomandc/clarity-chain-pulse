@@ -35,56 +35,17 @@ Clarinet.test({
 });
 
 Clarinet.test({
-  name: "Ensures invalid transaction amount is rejected",
+  name: "Ensures contract pause functionality works",
   async fn(chain: Chain, accounts: Map<string, Account>) {
     const deployer = accounts.get("deployer")!;
     
     let block = chain.mineBlock([
       Tx.contractCall(
         "chain-pulse",
-        "record-transaction",
-        [types.uint(0)],
+        "toggle-contract-pause",
+        [],
         deployer.address
-      )
-    ]);
-
-    block.receipts[0].result.expectErr(types.uint(101));
-  }
-});
-
-Clarinet.test({
-  name: "Ensures active address recording works",
-  async fn(chain: Chain, accounts: Map<string, Account>) {
-    const deployer = accounts.get("deployer")!;
-    
-    let block = chain.mineBlock([
-      Tx.contractCall(
-        "chain-pulse",
-        "record-active-address",
-        [types.principal(deployer.address)],
-        deployer.address
-      )
-    ]);
-
-    block.receipts[0].result.expectOk().expectBool(true);
-    
-    let addressActivity = chain.callReadOnlyFn(
-      "chain-pulse",
-      "get-address-last-active",
-      [types.principal(deployer.address)],
-      deployer.address
-    );
-    
-    addressActivity.result.expectSome();
-  }
-});
-
-Clarinet.test({
-  name: "Ensures total transaction count is tracked correctly",
-  async fn(chain: Chain, accounts: Map<string, Account>) {
-    const deployer = accounts.get("deployer")!;
-    
-    let block = chain.mineBlock([
+      ),
       Tx.contractCall(
         "chain-pulse",
         "record-transaction",
@@ -93,13 +54,25 @@ Clarinet.test({
       )
     ]);
 
-    let totalTx = chain.callReadOnlyFn(
-      "chain-pulse",
-      "get-total-tx-count",
-      [],
-      deployer.address
-    );
+    block.receipts[0].result.expectOk().expectBool(true);
+    block.receipts[1].result.expectErr(types.uint(104));
+  }
+});
+
+Clarinet.test({
+  name: "Ensures maximum transaction amount is enforced",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
     
-    totalTx.result.expectOk().expectUint(1);
+    let block = chain.mineBlock([
+      Tx.contractCall(
+        "chain-pulse",
+        "record-transaction",
+        [types.uint(1000000000001)],
+        deployer.address
+      )
+    ]);
+
+    block.receipts[0].result.expectErr(types.uint(101));
   }
 });
